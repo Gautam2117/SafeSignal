@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "660990465343",
+    "project_id": "safesignal-71957",
+    "storage_bucket": "safesignal-71957.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:660990465343:android:15ddb36d2a4fda0de3af8a",
+        "android_client_info": {
+          "package_name": "com.example.hackx"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "660990465343-kimnbrssim3s4hgol4iagh9p13akosah.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.hackx",
+            "certificate_hash": "cca8f75da2ec8b281e2bba50b398121506640f69"
+          }
+        },
+        {
+          "client_id": "660990465343-br1323utdav233q34frvqanboq1ttihr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXZGPMlfWMxx17S-f0S5fpPYM4xoij5xY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "660990465343-br1323utdav233q34frvqanboq1ttihr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
