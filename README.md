@@ -1,7 +1,3 @@
-Here is the enhanced version without the names of the images:
-
----
-
 # **SafeSignal**
 
 ## **Proposed Solution:**
