@@ -18,13 +18,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<dynamic> _newsArticles = [];
   Position? _currentPosition;
   String? _country;
+  String? _currentCity; // Added to store the current city
   List<bool> _showFullDescription = [];
   int userReportCount = 0;
-  List<dynamic> nearbyReports = [];
+  List<dynamic> nearbyReports = []; // Stores reports based on user's city
   String? userEmail;
   List<dynamic> userReports = [];
   bool _isLoadingNews = true;
-  String? _currentCity;
 
   @override
   void initState() {
@@ -41,7 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       userEmail = user.email;
       _getCurrentLocation();
       _fetchUserReports();
-      _fetchNearbyReports();
+      _fetchNearbyReports(); // Fetch nearby reports based on city
     }
   }
 
@@ -72,9 +72,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
       print('Current position: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
-      _fetchCountryFromCoordinates();
+      _fetchCityFromCoordinates(); // Fetch the user's city
+      _fetchCountryFromCoordinates(); // Fetch the user's country to get news
     } catch (e) {
       print('Error getting location: $e');
+    }
+  }
+
+  Future<void> _fetchCityFromCoordinates() async {
+    if (_currentPosition != null) {
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+        );
+        Placemark place = placemarks[0];
+        setState(() {
+          _currentCity = place.locality; // Get the city name
+          print('Current city: $_currentCity');
+        });
+        _fetchNearbyReports(); // Fetch nearby reports based on the city
+      } catch (e) {
+        print('Error fetching city: $e');
+      }
     }
   }
 
@@ -87,9 +107,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
         Placemark place = placemarks[0];
         setState(() {
-          _country = place.country;
+          _country = place.country; // Get the country name
+          print('Current country: $_country');
         });
-        _fetchNews();
+        _fetchNews(); // Fetch news once the country is determined
       } catch (e) {
         print('Error fetching country: $e');
       }
@@ -160,41 +181,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchNearbyReports() async {
-    if (_currentPosition == null) {
-      print("Current position not available");
+    if (_currentCity == null) {
+      print("Current city not available");
       return;
     }
 
     var collection = FirebaseFirestore.instance.collection('disaster_reports');
-    var snapshot = await collection.get();
+    var query = collection.where('location', isGreaterThanOrEqualTo: _currentCity).where('location', isLessThanOrEqualTo: _currentCity! + '\uf8ff');
 
-    for (var doc in snapshot.docs) {
-      var data = doc.data() as Map<String, dynamic>;
-      var locationAddress = data['location'];
-
-      try {
-        List<Location> locations = await locationFromAddress(locationAddress);
-
-        if (locations.isNotEmpty) {
-          var reportLocation = locations.first;
-
-          double distanceInMeters = Geolocator.distanceBetween(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
-            reportLocation.latitude,
-            reportLocation.longitude,
-          );
-
-          if (distanceInMeters <= 5000) { // Adjust the radius as needed
-            setState(() {
-              nearbyReports.add(data);
-            });
-          }
-        }
-      } catch (e) {
-        print("Error converting address or calculating distance: $e");
-      }
-    }
+    var snapshot = await query.get();
+    setState(() {
+      nearbyReports = snapshot.docs.map((doc) => doc.data()).toList();
+    });
   }
 
   @override
@@ -254,7 +252,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             physics: const NeverScrollableScrollPhysics(),
             children: [
               _dashboardCard('My Reports', userReportCount.toString()),
-              _dashboardCard('Nearby cases', '${nearbyReports.length} within 2km', onTap: () {
+              _dashboardCard('Nearby cases', '${nearbyReports.length} in $_currentCity', onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(

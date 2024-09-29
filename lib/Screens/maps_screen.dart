@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:geocoding/geocoding.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MapScreen extends StatefulWidget {
@@ -12,7 +10,9 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   Position? _currentPosition;
-  List<Marker> _markers = [];
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
+  Set<Circle> _circles = {};
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
@@ -28,7 +28,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _currentPosition = position;
       _addUserLocationMarker();
-      _fetchDisasterReports(); // Fetch disaster reports from Firestore
+      _fetchDisasterReports();
     });
   }
 
@@ -36,12 +36,9 @@ class _MapScreenState extends State<MapScreen> {
     if (_currentPosition != null) {
       _markers.add(
         Marker(
-          point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-          child: Icon(
-            Icons.location_pin,
-            color: Colors.blueAccent,
-            size: 40,
-          ),
+          markerId: MarkerId('user_location'),
+          position: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
         ),
       );
     }
@@ -51,56 +48,61 @@ class _MapScreenState extends State<MapScreen> {
     QuerySnapshot snapshot = await _firestore.collection('disaster_reports').get();
     Map<String, int> locationFrequency = {};
 
-    // Process Firestore data and generate markers
     for (var doc in snapshot.docs) {
       var data = doc.data() as Map<String, dynamic>;
-      var location = data['location'];
-      var latLng = await _getLatLngFromAddress(location);
+      var lat = data['latitude'];
+      var lng = data['longitude'];
 
-      if (latLng != null) {
+      if (lat != null && lng != null) {
+        LatLng latLng = LatLng(lat, lng);
         String locationKey = "${latLng.latitude},${latLng.longitude}";
         locationFrequency[locationKey] = (locationFrequency[locationKey] ?? 0) + 1;
 
-        // Check how many reports are within a 2-mile radius
         int nearbyReportCount = _countNearbyReports(latLng, locationFrequency);
-
-        // Set the pin color based on report frequency
         Color markerColor = _getMarkerColor(nearbyReportCount);
-
-        _markers.add(
-          Marker(
-            point: latLng,
-            child: Icon(
-              Icons.warning,
-              color: markerColor,
-              size: 40,
-            ),
-          ),
-        );
+        _addDisasterMarker(latLng, markerColor);
+        _addDisasterCircle(latLng, nearbyReportCount);
       }
     }
     setState(() {});
   }
 
-  // Convert an address into a LatLng
-  Future<LatLng?> _getLatLngFromAddress(String address) async {
-    try {
-      List<Location> locations = await locationFromAddress(address);
-      if (locations.isNotEmpty) {
-        return LatLng(locations.first.latitude, locations.first.longitude);
-      }
-    } catch (e) {
-      print("Error getting LatLng from address: $e");
-    }
-    return null;
+  void _addDisasterMarker(LatLng latLng, Color color) {
+    _markers.add(
+      Marker(
+        markerId: MarkerId(latLng.toString()),
+        position: latLng,
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          color == Colors.red
+              ? BitmapDescriptor.hueRed
+              : color == Colors.yellow
+              ? BitmapDescriptor.hueYellow
+              : BitmapDescriptor.hueGreen,
+        ),
+      ),
+    );
   }
 
-  // Count nearby reports within 2 miles (~3.2 km) of a given location
-  int _countNearbyReports(LatLng targetLocation, Map<String, int> locationFrequency) {
-    const double radiusMiles = 2.0;
-    const double radiusKm = radiusMiles * 1.60934;
+  void _addDisasterCircle(LatLng latLng, int reportCount) {
+    double radius = reportCount >= 10 ? 1000 : reportCount >= 5 ? 500 : 200;
+    Color color = _getMarkerColor(reportCount);
 
+    _circles.add(
+      Circle(
+        circleId: CircleId(latLng.toString()),
+        center: latLng,
+        radius: radius,
+        strokeWidth: 2,
+        strokeColor: color.withOpacity(0.5),
+        fillColor: color.withOpacity(0.2),
+      ),
+    );
+  }
+
+  int _countNearbyReports(LatLng targetLocation, Map<String, int> locationFrequency) {
+    const double radiusKm = 3.2;
     int count = 0;
+
     for (String key in locationFrequency.keys) {
       List<String> parts = key.split(',');
       double lat = double.parse(parts[0]);
@@ -114,7 +116,6 @@ class _MapScreenState extends State<MapScreen> {
         location.longitude,
       );
 
-      // Convert distance to kilometers and check if it's within the radius
       if (distance <= (radiusKm * 1000)) {
         count += locationFrequency[key]!;
       }
@@ -122,14 +123,13 @@ class _MapScreenState extends State<MapScreen> {
     return count;
   }
 
-  // Determine marker color based on nearby report frequency
   Color _getMarkerColor(int count) {
     if (count >= 10) {
-      return Colors.red; // More than 10 reports
+      return Colors.red;
     } else if (count >= 5) {
-      return Colors.yellow; // Between 5 and 9 reports
+      return Colors.yellow;
     } else {
-      return Colors.green; // Less than 5 reports
+      return Colors.green;
     }
   }
 
@@ -138,18 +138,16 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       body: _currentPosition == null
           ? const Center(child: CircularProgressIndicator())
-          : FlutterMap(
-        options: MapOptions(
-          initialCenter: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-          initialZoom: 12.0, // Adjust zoom level
+          : GoogleMap(
+        initialCameraPosition: CameraPosition(
+          target: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+          zoom: 12.0,
         ),
-        children: [
-          TileLayer(
-            urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            subdomains: ['a', 'b', 'c'],
-          ),
-          MarkerLayer(markers: _markers),
-        ],
+        markers: _markers,
+        circles: _circles,
+        onMapCreated: (GoogleMapController controller) {
+          _mapController = controller;
+        },
       ),
     );
   }

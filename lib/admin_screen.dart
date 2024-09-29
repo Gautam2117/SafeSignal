@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminDashboard extends StatefulWidget {
   @override
@@ -30,7 +31,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   void _generateSeverityChartData() {
-    // Process reports to calculate severity counts
     Map<String, int> severityCount = {'Low': 0, 'Medium': 0, 'High': 0, 'Critical': 0};
 
     for (var report in _reports) {
@@ -86,12 +86,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacementNamed(context, '/login');  // Replace with your login screen route
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
         backgroundColor: Colors.redAccent,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.logout),
+            onPressed: _logout,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
